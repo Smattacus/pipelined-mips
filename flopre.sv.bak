@@ -1,8 +1,0 @@
-module flopre	#(parameter WIDTH = 8)
-					 (input logic clk, reset, enable,
-					  input logic [31:0] d,
-					  input logic [31:0] q);
-
-
-					  
-endmodule
