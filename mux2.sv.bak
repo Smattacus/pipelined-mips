@@ -1,0 +1,2 @@
+module mux2 #(parameter WIDTH = 8)
+				 (input logic )

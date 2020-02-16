@@ -1,0 +1,3 @@
+module mux3(input logic  [1:0] 			s,
+				input logic  [PARAM - 1:0]	d0, d1, d2,
+				output logic [PARAM - 1:0] y)

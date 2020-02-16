@@ -1,0 +1,2 @@
+module flop_ce #(PARAMETER width = 8)
+					 
