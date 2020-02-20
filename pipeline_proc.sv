@@ -17,7 +17,7 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 							output logic [31:0] 	ALUOutM, WriteDataM, 
 							output logic 			MemWriteM,
 							//word read from data mem
-							input logic [31:0] 	ReadDataM, 
+							input logic [31:0] 	ReadDataM,
 							//Hazard Inputs.
 							input logic 			StallF, StallD,
 							input logic 			ForwardAD, ForwardBD,
@@ -65,6 +65,7 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 
 	//Controller signals:
 	logic [1:0] PCSrcD;
+	logic [7:0] ControlDtoE, ControlEfromD;
 	
 	//Execute (E) Suffix:
 	
@@ -76,10 +77,10 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 	logic [4:0] RdE;
 	logic [4:0] WriteRegE;
 	logic [31:0] SrcAE; 
-	logic [31:0] SrcBE;
+	logic [31:0] SrcBE, SrcBE_pre;
 	logic [31:0] WriteDataE;
 	logic [31:0] SignImmE;
-	logic [31:0] AluOutE;
+	logic [31:0] ALUOutE;
 	
 	//Controller
 	logic RegWriteE;
@@ -88,6 +89,8 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 	logic [2:0] ALUControlE;
 	logic ALUSrcE;
 	logic RegDstE;
+	
+	logic [2:0] ControlMfromE, ControlEtoM;
 	
 	//Memory stage (M)
 	//Datapath
@@ -119,7 +122,8 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 	//Fetch (F)
 	
 		//Mux the signal according to branch or jump.
-		mux3 #(32) bj_mux3({PCSrcD, JumpD}, PCPlus4D, PCBranchD, PCJumpD, bj_ResultF);
+		mux3 #(32) bj_mux3({PCSrcD, JumpD}, PCPlus4F, PCBranchD, PCJumpD, bj_ResultF);
+	
 	
 		//FF with synchronous clear.
 		//TODO: Convert to enable for pipelined.
@@ -138,12 +142,14 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 		assign PCSrcD[0] = BranchD & (RD1D_muxed == RD2D_muxed);
 		assign PCSrcD[1] = JumpD;
 	
-		//TODO: Convert to clear / enable for pipelined.
-		floprce #(32) Dreg_inst(clk, reset, StallD, |PCSrcD, InstrF, InstrD);
-		floprce #(32) Dreg_pcpl(clk, reset, StallD, |PCSrcD, PCPlus4F, PCPlus4D);
+		//Asynch reset FFs with synch clear / enable for pipelining.
+		//Datapath FFs:
+		floprce #(32) Dreg_inst_FD(clk, reset, StallD, PCSrcD[0] | PCSrcD[1], InstrF, InstrD);
+		floprce #(32) Dreg_pcpl_FD(clk, reset, StallD, PCSrcD[0] | PCSrcD[1], PCPlus4F, PCPlus4D);
+		
 		
 		//Register file
-		regfile rf(clk, reset, 
+		regfile rf(~clk, reset, 
 					  RegWriteW,
 					  InstrD[25:21],
 					  InstrD[20:16],
@@ -173,23 +179,30 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 		
 	//Execute (E)
 	
-		//TODO: Convert to hazard enabled FFs.
-		flopre #(32) flopr_E_RD1D(clk, reset, FlushE, RD1D_muxed, RD1E);
-		flopre #(32) flopr_E_RD2D(clk, reset, FlushE, RD2D_muxed, RD2E);
+		//Data path FFs.
 		
-		flopre #(5) flopr_rsE(clk, reset, FlushE, RsD, RsE);
-		flopre #(5) flopr_rtE(clk, reset, FlushE, RtD, RtE);
-		flopre #(5) flopr_rdE(clk, reset, FlushE, RdD, RdE);
+		//todo: correct input -> rd1, not the muxed signal!
+		floprc #(32) flopr_DE_RD1D(clk, reset, FlushE, RD1D, RD1E);
+		floprc #(32) flopr_DE_RD2D(clk, reset, FlushE, RD2D, RD2E);
 		
-		flopre #(32) flopr_SignImmE(clk, reset, FlushE, SignImmD, SignImmE);
+		floprc #(5) flopr_rs_DE(clk, reset, FlushE, RsD, RsE);
+		floprc #(5) flopr_rt_DE(clk, reset, FlushE, RtD, RtE);
+		floprc #(5) flopr_rd_DE(clk, reset, FlushE, RdD, RdE);
+		
+		floprc #(32) flopr_SignImm_DE(clk, reset, FlushE, SignImmD, SignImmE);
+		
+
+		
 		
 		//Rt vs Rd mux.
 		mux2 #(5) mux2_Rt_Rs(RtE, RdE, RegDstE, WriteRegE);
 		
 		//Muxes for hazard control. Set to always pass the RD1, RD2 values for now.
 		//TODO: update with control signals and FF for hazards.
-		mux3 #(32) mux3_RD1_ResultW_ALUOutM(2'b00, RD1E, ResultW, ALUOutM, SrcAE);
-		mux3 #(32) mux3_RD2_ResultW_ALUOutM(2'b00, RD2E, ResultW, ALUOutM, SrcBE);
+		mux3 #(32) mux3_RD1_ResultW_ALUOutM(ForwardAE, RD1E, ResultW, ALUOutM, SrcAE);
+		mux3 #(32) mux3_RD2_ResultW_ALUOutM(ForwardBE, RD2E, ResultW, ALUOutM, WriteDataE);
+		
+		mux2 #(32) mux2_RD2_toALU(ALUSrcE, WriteDataE, SignImmE, SrcBE);
 		
 		//ALU unit
 		//Leave "cout" and "zero" disconnected for now.
@@ -199,10 +212,13 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 		
 	// Memory (M)
 		
-		//TODO: convert to hazard enabled FFs.
-		flopr #(32) flopr_M_ALUOut(clk, reset, ALUOutE, ALUOutM);
-		flopr #(32) flopr_M_WriteDataM(clk, reset, WriteDataE, WriteDataM);
-		flopr #(32) flopr_M_WriteReg(clk, reset, WriteRegE, WriteRegM);
+		//No need for pipelining chunks here.
+		flopr #(32) flopr_EM_ALUOut(clk, reset, ALUOutE, ALUOutM);
+		flopr #(32) flopr_EM_WriteDataM(clk, reset, WriteDataE, WriteDataM);
+		flopr #(32) flopr_EM_WriteReg(clk, reset, WriteRegE, WriteRegM);
+		
+		//Set up control pipeline signals.
+
 		
 		//Data memory is external -- commented out.
 //		dmem data_mem(clk, MemWriteM, ALUOutM, WriteDataM, ReadDataM);
@@ -213,12 +229,32 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 	//Writeback (W)
 		
 		//TODO: Convert to hazard FFs.
-		flopr #(32) flopr_W_readData(clk, reset, ReadDataM, ReadDataW);
-		flopr #(32) flopr_W_ALUOut(clk, reset, ALUOutM, ALUOutW);
+		flopr #(32) flopr_MW_readData(clk, reset, ReadDataM, ReadDataW);
+		flopr #(32) flopr_MW_ALUOut(clk, reset, ALUOutM, ALUOutW);
+		
 		
 		mux2 #(32) mux2_W_ALU_ReadDataW(ALUOutW, ReadDataW, MemtoRegW, ResultW);
-	
-		
-		//TODO: Controller signals pipelining.
 
+	//CONTROL SIGNALS PIPELINING.
+	
+	//D to E pipeline register.
+	//Controller FFs:
+	//Define the input / output FF bus:
+	assign ControlDtoE = {RegWriteD, MemtoRegD, MemWriteD, ALUControlD, ALUSrcD, RegDstD};
+	assign {RegWriteE, MemtoRegE, MemWriteE, ALUControlE, ALUSrcE, RegDstE} = ControlEfromD;
+	floprc #(8) floprc_ctrl_DE(clk, reset, FlushE, ControlDtoE, ControlEfromD);	
+//	floprc #(1) floprc_ctrl_DE_rgwd(clk, reset, FlushE, RegWriteD, RegWriteE);
+	
+	//E to M pipeline register.
+	assign ControlEtoM = {RegWriteE, MemtoRegE, MemWriteE};
+	assign {RegWriteM, MemtoRegM, MemWriteM} = ControlMfromE;
+	//Control FF.
+	flopr #(3) flopr_ctrl_EM(clk, reset, ControlEtoM, ControlMfromE);
+	
+	//M to W pipeline register.
+	//Control FF.
+	flopr #(2) flopr_ctrl_MW(clk, reset, {RegWriteM, MemtoRegM}, {RegWriteW, MemtoRegW});
+
+		
+		
 endmodule

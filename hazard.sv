@@ -3,7 +3,7 @@ module hazard(output logic 			StallF, StallD,
 				  output logic [1:0] 	ForwardAE, ForwardBE,
 				  input logic 			BranchD,
 				  input logic 			JumpD,
-				  input logic [5:0]	hazard_single_bus,
+				  input logic [4:0]	hazard_single_bus,
 				  input logic [34:0] hazard_mult_bus);
 //hazard_singles = {MemtoRegE, RegWriteE, MemtoRegM, RegWriteM, RegWriteW}
 //hazard_mults = {rsD, rtD, rsE, rtE, WriteRegE, WriteRegM, WriteRegW}

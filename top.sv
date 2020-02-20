@@ -15,7 +15,7 @@ module top(input logic clk, reset,
 		logic 			StallF, StallD, ForwardAD, ForwardBD, FlushE;
 		logic [1:0]		ForwardAE, ForwardBE;
 		//hazard_singles = {MemtoRegE, RegWriteE, MemtoRegM, RegWriteM, RegWriteW}
-		logic [5:0] 	hazard_single_bus;
+		logic [4:0] 	hazard_single_bus;
 		//hazard_mults = {rsD, rtD, rsE, rtE, WriteRegE, WriteRegM, WriteRegW}
 		logic [34:0] 	hazard_mult_bus;
 		
@@ -40,7 +40,7 @@ module top(input logic clk, reset,
 		assign memwrite = MemWriteM;
 		
 		//Controller unit.
-		controller mips_controller(InstrD[31:26], InstrD[5:0], zero, RegWriteD, MemtoRegD, 
+		controller mips_controller(InstrD[31:26], InstrD[5:0], RegWriteD, MemtoRegD, 
 			MemWriteD, ALUSrcD, RegDstD, BranchD, JumpD, ALUControlD);
 		
 		
