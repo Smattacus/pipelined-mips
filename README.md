@@ -17,4 +17,4 @@ Hazard Unit support:
   - Branch prediction: The design assumes that the branches are not taken and has clear enabled FFs to flush invalidated data when a branch is taken. This does result in a branch misprediction penalty. RAW hazards introduced by this design choice are also addressed in the hazard unit.
 
 
-Design verification is the current focus.
+All levels currently synthesize. Design verification is the current focus and testbenches are being created.
