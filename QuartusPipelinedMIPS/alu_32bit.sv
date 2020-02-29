@@ -18,7 +18,7 @@ module alu_32bit(input logic [31:0] a, b,
 	logic [31:0] s;
 	
 	assign bb = f[2] ? ~b : b;
-	assign {s, cout} = a + bb + f[2];
+	assign {cout, s} = a + bb + f[2];
 	
 	always_comb
 		case(f[1:0])

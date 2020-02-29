@@ -2,7 +2,7 @@ module addi_testbench();
 
 	//This testbench should run with an adjusted instruction memfile 
 	//with a single instruction in it.
-	//memfile_r_add.dat
+	//memfile_addi.dat
 	//Implements the MIPS binary for: addi
 	//MIPS assembly: addi $3, $0, 5 #set $2 = 5. 
 	//machine code: 20020005

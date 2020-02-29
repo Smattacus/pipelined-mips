@@ -27,7 +27,7 @@ module top(input logic clk, reset,
 			hazard_single_bus,
 			hazard_mult_bus);
 			
-		imem instructions(clk, PCF, InstrF);
+		imem instructions(clk, PCF[7:2], InstrF);
 		
 		dmem data_memory(clk, MemWriteM, ALUOutM, WriteDataM, ReadDataM);
 		

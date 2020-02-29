@@ -127,14 +127,15 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 	
 		//FF with synchronous clear.
 		//TODO: Convert to enable for pipelined.
-		floprc #(32) pcreg(clk, reset, StallF, bj_ResultF, PCF);
+		flopre #(32) pcreg(clk, reset, ~StallF, bj_ResultF, PCF);
 	
 		//imemory IS EXTERNAL.
 //		imem instr_mem(clk, PCF, InstrF);
 		
 		//Create the normal PC step: MIPS memory is word aligned,
 		//so increment by 4 bytes.
-		assign PCPlus4F = PCF + 4;
+		//The memory address in my memory are 32 bits each, so bump up by one to get each instruction.
+		assign PCPlus4F = PCF + 32'b100;
 		
 		
 	// Decode (D)
@@ -144,8 +145,8 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 	
 		//Asynch reset FFs with synch clear / enable for pipelining.
 		//Datapath FFs:
-		floprce #(32) Dreg_inst_FD(clk, reset, StallD, PCSrcD[0] | PCSrcD[1], InstrF, InstrD);
-		floprce #(32) Dreg_pcpl_FD(clk, reset, StallD, PCSrcD[0] | PCSrcD[1], PCPlus4F, PCPlus4D);
+		floprce #(32) Dreg_inst_FD(clk, reset, PCSrcD[0] | PCSrcD[1], ~StallD, InstrF, InstrD);
+		floprce #(32) Dreg_pcpl_FD(clk, reset, PCSrcD[0] | PCSrcD[1], ~StallD, PCPlus4F, PCPlus4D);
 		
 		
 		//Register file
@@ -202,7 +203,7 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 		mux3 #(32) mux3_RD1_ResultW_ALUOutM(ForwardAE, RD1E, ResultW, ALUOutM, SrcAE);
 		mux3 #(32) mux3_RD2_ResultW_ALUOutM(ForwardBE, RD2E, ResultW, ALUOutM, WriteDataE);
 		
-		mux2 #(32) mux2_RD2_toALU(ALUSrcE, WriteDataE, SignImmE, SrcBE);
+		mux2 #(32) mux2_RD2_toALU(WriteDataE, SignImmE, ALUSrcE, SrcBE);
 		
 		//ALU unit
 		//Leave "cout" and "zero" disconnected for now.
