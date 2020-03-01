@@ -9,4 +9,8 @@ assign rd = RAM[a[31:2]]; // word aligned
 always_ff @(posedge clk)
 	if (we) RAM[a[31:2]] <= wd;
 
+//initialize it.
+//ONLY FOR DEBUGGING PURPOSES.
+initial $readmemh("dmem_init_increasing.dat", RAM);
+	
 endmodule

@@ -174,8 +174,10 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 		//Calculate JTA for jump instructions.
 		assign PCJumpD = {PCPlus4D[31:28], InstrD[25:0], 2'b00};
 		
-		//TODO: Controller signals pipelining.
-		//Note: the controller inputs are already in the D stage.
+		//Assign RsD, RtD, RdD from InstrD.
+		assign RsD = InstrD[25:21];
+		assign RtD = InstrD[20:16];
+		assign RdD = InstrD[15:11];
 		
 		
 	//Execute (E)
@@ -223,15 +225,14 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 		
 		//Data memory is external -- commented out.
 //		dmem data_mem(clk, MemWriteM, ALUOutM, WriteDataM, ReadDataM);
-	
-		//TODO: Controller signals pipelining.
 		
 		
 	//Writeback (W)
 		
-		//TODO: Convert to hazard FFs.
+		//Pipeline register. No HCU inputs necessary here.
 		flopr #(32) flopr_MW_readData(clk, reset, ReadDataM, ReadDataW);
 		flopr #(32) flopr_MW_ALUOut(clk, reset, ALUOutM, ALUOutW);
+		flopr #(32) flopr_MW_WriteReg(clk, reset, WriteRegM, WriteRegW);
 		
 		
 		mux2 #(32) mux2_W_ALU_ReadDataW(ALUOutW, ReadDataW, MemtoRegW, ResultW);
