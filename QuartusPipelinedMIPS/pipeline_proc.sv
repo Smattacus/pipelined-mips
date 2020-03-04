@@ -121,13 +121,14 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 	
 	//fetch (f)
 	
+	
+		always_ff @(posedge clk, posedge reset)
+			if (reset) pcf <= 0;
+			else if (~stallf) pcf <= bj_resultf; 
+	
+
 		//mux the signal according to branch or jump.
-		mux3 #(32) bj_mux3({pcsrcd, jumpd}, pcplus4f, pcbranchd, pcjumpd, bj_resultf);
-	
-	
-		//ff with synchronous clear.
-		//todo: convert to enable for pipelined.
-		flopre #(32) pcreg(clk, reset, ~stallf, bj_resultf, pcf);
+		mux3 #(32) bj_mux3(pcsrcd, pcplus4f, pcbranchd, pcjumpd, bj_resultf);
 	
 		//imemory is external.
 //		imem instr_mem(clk, pcf, instrf);
@@ -135,7 +136,7 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 		//create the normal pc step: mips memory is word aligned,
 		//so increment by 4 bytes.
 		//the memory address in my memory are 32 bits each, so bump up by one to get each instruction.
-		assign pcplus4f = pcf + 32'b100;
+		assign pcplus4f = pcf + 4;
 		
 		
 	// decode (d)
@@ -143,11 +144,21 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 		assign pcsrcd[0] = branchd & (rd1d_muxed == rd2d_muxed);
 		assign pcsrcd[1] = jumpd;
 	
-		//asynch reset ffs with synch clear / enable for pipelining.
+		//asynch reset FF with synch clear / enable for pipelining.
 		//datapath ffs:
-		floprce #(32) dreg_inst_fd(clk, reset, pcsrcd[0] | pcsrcd[1], ~stalld, instrf, instrd);
-		floprce #(32) dreg_pcpl_fd(clk, reset, pcsrcd[0] | pcsrcd[1], ~stalld, pcplus4f, pcplus4d);
+		assign d_ff_rst = reset | (|pcsrcd); //Todo: verify this one liner does actually do (a OR (b[1]OR b[2]))
 		
+		always_ff @(posedge clk, posedge d_ff_rst)
+			if (d_ff_rst) begin
+				//Data signals
+				instrd <= 0;
+				pcplus4d <= 0;
+			end
+			else if (~stalld) begin
+				//Data signals
+				instrd <= instrf;
+				pcplus4d <= pcplus4f;
+			end
 		
 		//register file
 		regfile rf(~clk, reset, 
@@ -172,7 +183,7 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 		adder add_pc_signimmext(signimmdls2, pcplus4d, pcbranchd);
 		
 		//calculate jta for jump instructions.
-		assign pcjumpd = {pcplus4d[31:28], instrd[25:0], 2'b00};
+		assign pcjumpd[31:0] = {pcplus4d[31:28], instrd[25:0], 2'b00};
 		
 		//assign rsd, rtd, rdd from instrd.
 		assign rsd = instrd[25:21];
@@ -181,20 +192,54 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 		
 		
 	//execute (e)
-	
-		//data path ffs.
-		
-		//todo: correct input -> rd1, not the muxed signal!
-		floprc #(32) flopr_de_rd1d(clk, reset, flushe, rd1d, rd1e);
-		floprc #(32) flopr_de_rd2d(clk, reset, flushe, rd2d, rd2e);
-		
-		floprc #(5) flopr_rs_de(clk, reset, flushe, rsd, rse);
-		floprc #(5) flopr_rt_de(clk, reset, flushe, rtd, rte);
-		floprc #(5) flopr_rd_de(clk, reset, flushe, rdd, rde);
-		
-		floprc #(32) flopr_signimm_de(clk, reset, flushe, signimmd, signimme);
-		
 
+		//Execute Stage FF with asynch reset and synch clear.
+		always_ff @(posedge clk, posedge reset)
+		if (reset) begin
+			rd1e <= 0;
+			rd2e <= 0;
+			rse <= 0;
+			rte <= 0;
+			rde <= 0;
+			signimme <= 0;
+			//Control signals
+			regwritee <= 0;
+			memtorege <= 0;
+			memwritee <= 0;
+			alucontrole <= 0;
+			alusrce <= 0;
+			regdste <= 0;		
+		end
+		else if (flushe) begin //can I just write (reset | flushe) above and get rid of this?
+			rd1e <= 0;
+			rd2e <= 0;
+			rse <= 0;
+			rte <= 0;
+			rde <= 0;
+			signimme <= 0;
+			//Control signals
+			regwritee <= 0;
+			memtorege <= 0;
+			memwritee <= 0;
+			alucontrole <= 0;
+			alusrce <= 0;
+			regdste <= 0;	
+		end
+		else begin
+			rd1e <= rd1d;
+			rd2e <= rd2d;
+			rse <= rsd;
+			rte <= rtd;
+			rde <= rdd;
+			signimme <= signimmd;
+			//Control signals
+			regwritee <= regwrited;
+			memtorege <= memtoregd;
+			memwritee <= memwrited;
+			alucontrole <= alucontrold;
+			alusrce <= alusrcd;
+			regdste <= regdstd;
+		end
 		
 		
 		//rt vs rd mux.
@@ -214,49 +259,57 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 		//todo: controller signals pipelining.
 		
 	// memory (m)
+
+		//Memory FF from Execute stage. Asynch reset.
+		always_ff @(posedge clk, posedge reset)
+		if (reset) begin
+			//Data signals.
+			aluoutm <= 0;
+			writedatam <= 0;
+			writeregm <= 0;
+			//Control Signals.
+			regwritem <= 0;
+			memtoregm <= 0;
+			memwritem <= 0;
+		end
+		else begin
+			//Data signals
+			aluoutm <= aluoute;
+			writedatam <= writedatae;
+			writeregm <= writerege;
+			//Control Signals
+			regwritem <= regwritee;
+			memtoregm <= memtorege;
+			memwritem <= memwritee;
+			
+		end
 		
-		//no need for pipelining chunks here.
-		flopr #(32) flopr_em_aluout(clk, reset, aluoute, aluoutm);
-		flopr #(32) flopr_em_writedatam(clk, reset, writedatae, writedatam);
-		flopr #(32) flopr_em_writereg(clk, reset, writerege, writeregm);
-		
-		//set up control pipeline signals.
 
 		
 		//data memory is external -- commented out.
 //		dmem data_mem(clk, memwritem, aluoutm, writedatam, readdatam);
 		
 		
-	//writeback (w)
-		
-		//pipeline register. no hcu inputs necessary here.
-		flopr #(32) flopr_mw_readdata(clk, reset, readdatam, readdataw);
-		flopr #(32) flopr_mw_aluout(clk, reset, aluoutm, aluoutw);
-		flopr #(32) flopr_mw_writereg(clk, reset, writeregm, writeregw);
-		
+	//Writeback (w)
+
+		always_ff @(posedge clk, posedge reset)
+		if (reset) begin
+			readdataw <= 0;
+			aluoutw <= 0;
+			writeregw <= 0;
+			//Control Signals
+			regwritew <= 0;
+			memtoregw <= 0;
+		end
+		else begin
+			readdataw <= readdatam;
+			aluoutw <= aluoutm;
+			writeregw <= writeregm;
+			//Control Signals
+			regwritew <= regwritem;
+			memtoregw <= memtoregm;
+		end
 		
 		mux2 #(32) mux2_w_alu_readdataw(aluoutw, readdataw, memtoregw, resultw);
 
-	//control signals pipelining.
-	
-	//d to e pipeline register.
-	//controller ffs:
-	//define the input / output ff bus:
-	assign controldtoe = {regwrited, memtoregd, memwrited, alucontrold, alusrcd, regdstd};
-	assign {regwritee, memtorege, memwritee, alucontrole, alusrce, regdste} = controlefromd;
-	floprc #(8) floprc_ctrl_de(clk, reset, flushe, controldtoe, controlefromd);	
-//	floprc #(1) floprc_ctrl_de_rgwd(clk, reset, flushe, regwrited, regwritee);
-	
-	//e to m pipeline register.
-	assign controletom = {regwritee, memtorege, memwritee};
-	assign {regwritem, memtoregm, memwritem} = controlmfrome;
-	//control ff.
-	flopr #(3) flopr_ctrl_em(clk, reset, controletom, controlmfrome);
-	
-	//m to w pipeline register.
-	//control ff.
-	flopr #(2) flopr_ctrl_mw(clk, reset, {regwritem, memtoregm}, {regwritew, memtoregw});
-
-		
-		
 endmodule

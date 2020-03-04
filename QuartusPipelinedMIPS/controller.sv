@@ -7,7 +7,6 @@ module controller(input logic 	[5:0] opcode, funct,
 	//can also work for a single cycle mips processor.
 						
 	logic [1:0] aluop;
-	logic branch;
 	
 	maindec md(opcode, regwrite, memtoreg, memwrite, alusrc,
 					regdst, branch, jump, aluop);
