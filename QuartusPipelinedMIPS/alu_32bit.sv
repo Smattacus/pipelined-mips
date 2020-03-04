@@ -4,15 +4,15 @@ module alu_32bit(input logic [31:0] a, b,
 					  output logic cout,
 					  output logic zero);
 			
-	//ALU with the following operations (listed by control signal f:)
-	//000	- a AND b
-	//001 - a OR b
+	//alu with the following operations (listed by control signal f:)
+	//000	- a and b
+	//001 - a or b
 	//010 - a + b
 	//011 - not used
-	//100 - a AND bbar
-	//101 - a OR bbar
+	//100 - a and bbar
+	//101 - a or bbar
 	//110 - a - b
-	//111 - SLT ( sign less than; a < b).
+	//111 - slt ( sign less than; a < b).
 	
 	logic [31:0] bb;
 	logic [31:0] s;

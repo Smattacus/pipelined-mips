@@ -1,10 +1,10 @@
 module addi_testbench();
 
-	//This testbench should run with an adjusted instruction memfile 
+	//this testbench should run with an adjusted instruction memfile 
 	//with a single instruction in it.
 	//memfile_addi.dat
-	//Implements the MIPS binary for: addi
-	//MIPS assembly: addi $3, $0, 5 #set $2 = 5. 
+	//implements the mips binary for: addi
+	//mips assembly: addi $3, $0, 5 #set $2 = 5. 
 	//machine code: 20020005
 	
 	logic clk, reset;
@@ -12,26 +12,26 @@ module addi_testbench();
 	logic memwrite;
 	logic [31:0] clock_count;
 	
-	//Instantiate MIPS processor.
+	//instantiate mips processor.
 	top dut(clk, reset, writedata, dataadr, memwrite);
 	
-	//Reset to start out.
+	//reset to start out.
 	initial
 		begin
 			clock_count = 0;
 			reset <= 1; #22; reset <= 0;
 		end
 	
-	//Clock.
+	//clock.
 	always begin
 		clk <= 1; #5; clk <= 0; #5;
 	end
 	
-	//For now, just stop the simulation after 25 clock cycles.
+	//for now, just stop the simulation after 25 clock cycles.
 	always @(posedge clk)
 	begin
 		if (clock_count === 25) begin
-			$display("Simulation done!");
+			$display("simulation done!");
 			$stop;
 		end
 		else

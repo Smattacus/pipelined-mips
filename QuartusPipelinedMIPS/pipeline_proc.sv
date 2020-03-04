@@ -1,261 +1,261 @@
 module pipeline_proc(input  logic 			clk, reset, enable,
 							//output to external controller
-							output logic [31:0] 	InstrD, 
+							output logic [31:0] 	instrd, 
 							//controller inputs
-							input logic 			RegWriteD, MemtoRegD, 
-							input logic 			MemWriteD, 
-							input logic [2:0] 	ALUControlD,
-							input logic 			ALUSrcD, 
-							input logic 			RegDstD,
-							input logic 			BranchD,
-							input logic 			JumpD,
+							input logic 			regwrited, memtoregd, 
+							input logic 			memwrited, 
+							input logic [2:0] 	alucontrold,
+							input logic 			alusrcd, 
+							input logic 			regdstd,
+							input logic 			branchd,
+							input logic 			jumpd,
 							//output to instr mem
-							output logic [31:0] 	PCF, 
+							output logic [31:0] 	pcf, 
 							//instruction input
-							input logic [31:0] 	InstrF, 
-							//Output to data mem
-							output logic [31:0] 	ALUOutM, WriteDataM, 
-							output logic 			MemWriteM,
+							input logic [31:0] 	instrf, 
+							//output to data mem
+							output logic [31:0] 	aluoutm, writedatam, 
+							output logic 			memwritem,
 							//word read from data mem
-							input logic [31:0] 	ReadDataM,
-							//Hazard Inputs.
-							input logic 			StallF, StallD,
-							input logic 			ForwardAD, ForwardBD,
-							input logic 			FlushE,
-							input logic [1:0] 	ForwardAE, ForwardBE,
-							//Define hazard outputs here.
-							//Six one bit signals:
-							//{MemtoRegE, RegWriteE, MemtoRegM, RegWriteM, RegWriteW}
-							//Note branchD comes from the controller to the HCU.
+							input logic [31:0] 	readdatam,
+							//hazard inputs.
+							input logic 			stallf, stalld,
+							input logic 			forwardad, forwardbd,
+							input logic 			flushe,
+							input logic [1:0] 	forwardae, forwardbe,
+							//define hazard outputs here.
+							//six one bit signals:
+							//{memtorege, regwritee, memtoregm, regwritem, regwritew}
+							//note branchd comes from the controller to the hcu.
 							output logic [4:0]	hazard_singles,
-							//{rsD, rtD, rsE, rtE, WriteRegE, WriteReg, WriteRegW}
-							//Each of these is 5 bits.
+							//{rsd, rtd, rse, rte, writerege, writereg, writeregw}
+							//each of these is 5 bits.
 							output logic [34:0] 	hazard_mults);
 							
 					 
-	//This is the pipelined processor.
-	//The memories and controller are external,
+	//this is the pipelined processor.
+	//the memories and controller are external,
 	//so we have to send data in / out to them.
-	//The controller inputs come in at the "decode" stage.
+	//the controller inputs come in at the "decode" stage.
 	
-	//Sections:
-	//1. Signal definitions.
-	//2. Module definitions.
+	//sections:
+	//1. signal definitions.
+	//2. module definitions.
 	
-	//Signal list - grouped by fetch, decode, execute, memory, writeback.
-	logic [31:0] PC;
+	//signal list - grouped by fetch, decode, execute, memory, writeback.
+	logic [31:0] pc;
 
-	//Fetch (F):
+	//fetch (f):
 
-	logic [31:0] bj_ResultF;
-	logic [31:0] PCPlus4F;
+	logic [31:0] bj_resultf;
+	logic [31:0] pcplus4f;
 	
 	
-	//Decode (D) suffix
+	//decode (d) suffix
 
-	//Datapath:
-	logic [31:0] RD1D, RD1D_muxed;
-	logic [31:0] RD2D, RD2D_muxed;
-	logic [31:0] SignImmD, SignImmDls2;
-	logic [31:0] PCPlus4D;
-	logic [31:0] PCBranchD;
-	logic [31:0] PCJumpD;
-	logic EqualD;
-	logic [4:0] RsD, RtD, RdD;
+	//datapath:
+	logic [31:0] rd1d, rd1d_muxed;
+	logic [31:0] rd2d, rd2d_muxed;
+	logic [31:0] signimmd, signimmdls2;
+	logic [31:0] pcplus4d;
+	logic [31:0] pcbranchd;
+	logic [31:0] pcjumpd;
+	logic equald;
+	logic [4:0] rsd, rtd, rdd;
 
-	//Controller signals:
-	logic [1:0] PCSrcD;
-	logic [7:0] ControlDtoE, ControlEfromD;
+	//controller signals:
+	logic [1:0] pcsrcd;
+	logic [7:0] controldtoe, controlefromd;
 	
-	//Execute (E) Suffix:
+	//execute (e) suffix:
 	
-	//Datapath:
-	logic [31:0] RD1E; 
-	logic [31:0] RD2E;
-	logic [4:0] RsE;
-	logic [4:0] RtE;
-	logic [4:0] RdE;
-	logic [4:0] WriteRegE;
-	logic [31:0] SrcAE; 
-	logic [31:0] SrcBE, SrcBE_pre;
-	logic [31:0] WriteDataE;
-	logic [31:0] SignImmE;
-	logic [31:0] ALUOutE;
+	//datapath:
+	logic [31:0] rd1e; 
+	logic [31:0] rd2e;
+	logic [4:0] rse;
+	logic [4:0] rte;
+	logic [4:0] rde;
+	logic [4:0] writerege;
+	logic [31:0] srcae; 
+	logic [31:0] srcbe, srcbe_pre;
+	logic [31:0] writedatae;
+	logic [31:0] signimme;
+	logic [31:0] aluoute;
 	
-	//Controller
-	logic RegWriteE;
-	logic MemtoRegE;
-	logic MemWriteE;
-	logic [2:0] ALUControlE;
-	logic ALUSrcE;
-	logic RegDstE;
+	//controller
+	logic regwritee;
+	logic memtorege;
+	logic memwritee;
+	logic [2:0] alucontrole;
+	logic alusrce;
+	logic regdste;
 	
-	logic [2:0] ControlMfromE, ControlEtoM;
+	logic [2:0] controlmfrome, controletom;
 	
-	//Memory stage (M)
-	//Datapath
-	logic [4:0] WriteRegM;
+	//memory stage (m)
+	//datapath
+	logic [4:0] writeregm;
 	
-	//Controller
-	logic RegWriteM;
-	logic MemtoRegM;
+	//controller
+	logic regwritem;
+	logic memtoregm;
 	
-	//Writeback Stage (W)
-	//Datapath
-	logic [31:0] ReadDataW;
-	logic [31:0] ALUOutW;
-	logic [4:0] WriteRegW;
-	logic [31:0] ResultW;
+	//writeback stage (w)
+	//datapath
+	logic [31:0] readdataw;
+	logic [31:0] aluoutw;
+	logic [4:0] writeregw;
+	logic [31:0] resultw;
 	
-	//Controller
-	logic RegWriteW;
-	logic MemtoRegW;
+	//controller
+	logic regwritew;
+	logic memtoregw;
 	
-	//Set up bus signals to go to / from the HCU.
+	//set up bus signals to go to / from the hcu.
 	
-	assign hazard_singles = {MemtoRegE, RegWriteE, MemtoRegM, RegWriteM, RegWriteW};
-	assign hazard_mults = {RsD, RtD, RsE, RtE, WriteRegE, WriteRegM, WriteRegW};
+	assign hazard_singles = {memtorege, regwritee, memtoregm, regwritem, regwritew};
+	assign hazard_mults = {rsd, rtd, rse, rte, writerege, writeregm, writeregw};
 		
-	//Organize this into the pipelined sections.
-	//From left to right:
+	//organize this into the pipelined sections.
+	//from left to right:
 	
-	//Fetch (F)
+	//fetch (f)
 	
-		//Mux the signal according to branch or jump.
-		mux3 #(32) bj_mux3({PCSrcD, JumpD}, PCPlus4F, PCBranchD, PCJumpD, bj_ResultF);
+		//mux the signal according to branch or jump.
+		mux3 #(32) bj_mux3({pcsrcd, jumpd}, pcplus4f, pcbranchd, pcjumpd, bj_resultf);
 	
 	
-		//FF with synchronous clear.
-		//TODO: Convert to enable for pipelined.
-		flopre #(32) pcreg(clk, reset, ~StallF, bj_ResultF, PCF);
+		//ff with synchronous clear.
+		//todo: convert to enable for pipelined.
+		flopre #(32) pcreg(clk, reset, ~stallf, bj_resultf, pcf);
 	
-		//imemory IS EXTERNAL.
-//		imem instr_mem(clk, PCF, InstrF);
+		//imemory is external.
+//		imem instr_mem(clk, pcf, instrf);
 		
-		//Create the normal PC step: MIPS memory is word aligned,
+		//create the normal pc step: mips memory is word aligned,
 		//so increment by 4 bytes.
-		//The memory address in my memory are 32 bits each, so bump up by one to get each instruction.
-		assign PCPlus4F = PCF + 32'b100;
+		//the memory address in my memory are 32 bits each, so bump up by one to get each instruction.
+		assign pcplus4f = pcf + 32'b100;
 		
 		
-	// Decode (D)
+	// decode (d)
 
-		assign PCSrcD[0] = BranchD & (RD1D_muxed == RD2D_muxed);
-		assign PCSrcD[1] = JumpD;
+		assign pcsrcd[0] = branchd & (rd1d_muxed == rd2d_muxed);
+		assign pcsrcd[1] = jumpd;
 	
-		//Asynch reset FFs with synch clear / enable for pipelining.
-		//Datapath FFs:
-		floprce #(32) Dreg_inst_FD(clk, reset, PCSrcD[0] | PCSrcD[1], ~StallD, InstrF, InstrD);
-		floprce #(32) Dreg_pcpl_FD(clk, reset, PCSrcD[0] | PCSrcD[1], ~StallD, PCPlus4F, PCPlus4D);
+		//asynch reset ffs with synch clear / enable for pipelining.
+		//datapath ffs:
+		floprce #(32) dreg_inst_fd(clk, reset, pcsrcd[0] | pcsrcd[1], ~stalld, instrf, instrd);
+		floprce #(32) dreg_pcpl_fd(clk, reset, pcsrcd[0] | pcsrcd[1], ~stalld, pcplus4f, pcplus4d);
 		
 		
-		//Register file
+		//register file
 		regfile rf(~clk, reset, 
-					  RegWriteW,
-					  InstrD[25:21],
-					  InstrD[20:16],
-					  WriteRegW,
-					  ResultW,
-					  RD1D,
-					  RD2D);
+					  regwritew,
+					  instrd[25:21],
+					  instrd[20:16],
+					  writeregw,
+					  resultw,
+					  rd1d,
+					  rd2d);
 					  
-		//RF rd output muxes
-		//TODO: Adjust s signal to be from hazard unit.
-		mux2 #(32) rd1_mux2(RD1D, ALUOutM, 1'b0, RD1D_muxed);
-		mux2 #(32) rd2_mux2(RD2D, ALUOutM, 1'b0, RD2D_muxed);
+		//rf rd output muxes
+		//todo: adjust s signal to be from hazard unit.
+		mux2 #(32) rd1_mux2(rd1d, aluoutm, 1'b0, rd1d_muxed);
+		mux2 #(32) rd2_mux2(rd2d, aluoutm, 1'b0, rd2d_muxed);
 				
-		//Sign Immediate extension.
-		signext signext_imm(InstrD[15:0], SignImmD);
+		//sign immediate extension.
+		signext signext_imm(instrd[15:0], signimmd);
 		
-		ls2 ls2_SignExtImm(SignImmD, SignImmDls2);
+		ls2 ls2_signextimm(signimmd, signimmdls2);
 		
-		adder add_PC_SignImmExt(SignImmDls2, PCPlus4D, PCBranchD);
+		adder add_pc_signimmext(signimmdls2, pcplus4d, pcbranchd);
 		
-		//Calculate JTA for jump instructions.
-		assign PCJumpD = {PCPlus4D[31:28], InstrD[25:0], 2'b00};
+		//calculate jta for jump instructions.
+		assign pcjumpd = {pcplus4d[31:28], instrd[25:0], 2'b00};
 		
-		//Assign RsD, RtD, RdD from InstrD.
-		assign RsD = InstrD[25:21];
-		assign RtD = InstrD[20:16];
-		assign RdD = InstrD[15:11];
+		//assign rsd, rtd, rdd from instrd.
+		assign rsd = instrd[25:21];
+		assign rtd = instrd[20:16];
+		assign rdd = instrd[15:11];
 		
 		
-	//Execute (E)
+	//execute (e)
 	
-		//Data path FFs.
+		//data path ffs.
 		
 		//todo: correct input -> rd1, not the muxed signal!
-		floprc #(32) flopr_DE_RD1D(clk, reset, FlushE, RD1D, RD1E);
-		floprc #(32) flopr_DE_RD2D(clk, reset, FlushE, RD2D, RD2E);
+		floprc #(32) flopr_de_rd1d(clk, reset, flushe, rd1d, rd1e);
+		floprc #(32) flopr_de_rd2d(clk, reset, flushe, rd2d, rd2e);
 		
-		floprc #(5) flopr_rs_DE(clk, reset, FlushE, RsD, RsE);
-		floprc #(5) flopr_rt_DE(clk, reset, FlushE, RtD, RtE);
-		floprc #(5) flopr_rd_DE(clk, reset, FlushE, RdD, RdE);
+		floprc #(5) flopr_rs_de(clk, reset, flushe, rsd, rse);
+		floprc #(5) flopr_rt_de(clk, reset, flushe, rtd, rte);
+		floprc #(5) flopr_rd_de(clk, reset, flushe, rdd, rde);
 		
-		floprc #(32) flopr_SignImm_DE(clk, reset, FlushE, SignImmD, SignImmE);
+		floprc #(32) flopr_signimm_de(clk, reset, flushe, signimmd, signimme);
 		
 
 		
 		
-		//Rt vs Rd mux.
-		mux2 #(5) mux2_Rt_Rs(RtE, RdE, RegDstE, WriteRegE);
+		//rt vs rd mux.
+		mux2 #(5) mux2_rt_rs(rte, rde, regdste, writerege);
 		
-		//Muxes for hazard control. Set to always pass the RD1, RD2 values for now.
-		//TODO: update with control signals and FF for hazards.
-		mux3 #(32) mux3_RD1_ResultW_ALUOutM(ForwardAE, RD1E, ResultW, ALUOutM, SrcAE);
-		mux3 #(32) mux3_RD2_ResultW_ALUOutM(ForwardBE, RD2E, ResultW, ALUOutM, WriteDataE);
+		//muxes for hazard control. set to always pass the rd1, rd2 values for now.
+		//todo: update with control signals and ff for hazards.
+		mux3 #(32) mux3_rd1_resultw_aluoutm(forwardae, rd1e, resultw, aluoutm, srcae);
+		mux3 #(32) mux3_rd2_resultw_aluoutm(forwardbe, rd2e, resultw, aluoutm, writedatae);
 		
-		mux2 #(32) mux2_RD2_toALU(WriteDataE, SignImmE, ALUSrcE, SrcBE);
+		mux2 #(32) mux2_rd2_toalu(writedatae, signimme, alusrce, srcbe);
 		
-		//ALU unit
-		//Leave "cout" and "zero" disconnected for now.
-		alu_32bit alu(SrcAE, SrcBE, ALUControlE, ALUOutE, , );
+		//alu unit
+		//leave "cout" and "zero" disconnected for now.
+		alu_32bit alu(srcae, srcbe, alucontrole, aluoute, , );
 		
-		//TODO: Controller signals pipelining.
+		//todo: controller signals pipelining.
 		
-	// Memory (M)
+	// memory (m)
 		
-		//No need for pipelining chunks here.
-		flopr #(32) flopr_EM_ALUOut(clk, reset, ALUOutE, ALUOutM);
-		flopr #(32) flopr_EM_WriteDataM(clk, reset, WriteDataE, WriteDataM);
-		flopr #(32) flopr_EM_WriteReg(clk, reset, WriteRegE, WriteRegM);
+		//no need for pipelining chunks here.
+		flopr #(32) flopr_em_aluout(clk, reset, aluoute, aluoutm);
+		flopr #(32) flopr_em_writedatam(clk, reset, writedatae, writedatam);
+		flopr #(32) flopr_em_writereg(clk, reset, writerege, writeregm);
 		
-		//Set up control pipeline signals.
+		//set up control pipeline signals.
 
 		
-		//Data memory is external -- commented out.
-//		dmem data_mem(clk, MemWriteM, ALUOutM, WriteDataM, ReadDataM);
+		//data memory is external -- commented out.
+//		dmem data_mem(clk, memwritem, aluoutm, writedatam, readdatam);
 		
 		
-	//Writeback (W)
+	//writeback (w)
 		
-		//Pipeline register. No HCU inputs necessary here.
-		flopr #(32) flopr_MW_readData(clk, reset, ReadDataM, ReadDataW);
-		flopr #(32) flopr_MW_ALUOut(clk, reset, ALUOutM, ALUOutW);
-		flopr #(32) flopr_MW_WriteReg(clk, reset, WriteRegM, WriteRegW);
+		//pipeline register. no hcu inputs necessary here.
+		flopr #(32) flopr_mw_readdata(clk, reset, readdatam, readdataw);
+		flopr #(32) flopr_mw_aluout(clk, reset, aluoutm, aluoutw);
+		flopr #(32) flopr_mw_writereg(clk, reset, writeregm, writeregw);
 		
 		
-		mux2 #(32) mux2_W_ALU_ReadDataW(ALUOutW, ReadDataW, MemtoRegW, ResultW);
+		mux2 #(32) mux2_w_alu_readdataw(aluoutw, readdataw, memtoregw, resultw);
 
-	//CONTROL SIGNALS PIPELINING.
+	//control signals pipelining.
 	
-	//D to E pipeline register.
-	//Controller FFs:
-	//Define the input / output FF bus:
-	assign ControlDtoE = {RegWriteD, MemtoRegD, MemWriteD, ALUControlD, ALUSrcD, RegDstD};
-	assign {RegWriteE, MemtoRegE, MemWriteE, ALUControlE, ALUSrcE, RegDstE} = ControlEfromD;
-	floprc #(8) floprc_ctrl_DE(clk, reset, FlushE, ControlDtoE, ControlEfromD);	
-//	floprc #(1) floprc_ctrl_DE_rgwd(clk, reset, FlushE, RegWriteD, RegWriteE);
+	//d to e pipeline register.
+	//controller ffs:
+	//define the input / output ff bus:
+	assign controldtoe = {regwrited, memtoregd, memwrited, alucontrold, alusrcd, regdstd};
+	assign {regwritee, memtorege, memwritee, alucontrole, alusrce, regdste} = controlefromd;
+	floprc #(8) floprc_ctrl_de(clk, reset, flushe, controldtoe, controlefromd);	
+//	floprc #(1) floprc_ctrl_de_rgwd(clk, reset, flushe, regwrited, regwritee);
 	
-	//E to M pipeline register.
-	assign ControlEtoM = {RegWriteE, MemtoRegE, MemWriteE};
-	assign {RegWriteM, MemtoRegM, MemWriteM} = ControlMfromE;
-	//Control FF.
-	flopr #(3) flopr_ctrl_EM(clk, reset, ControlEtoM, ControlMfromE);
+	//e to m pipeline register.
+	assign controletom = {regwritee, memtorege, memwritee};
+	assign {regwritem, memtoregm, memwritem} = controlmfrome;
+	//control ff.
+	flopr #(3) flopr_ctrl_em(clk, reset, controletom, controlmfrome);
 	
-	//M to W pipeline register.
-	//Control FF.
-	flopr #(2) flopr_ctrl_MW(clk, reset, {RegWriteM, MemtoRegM}, {RegWriteW, MemtoRegW});
+	//m to w pipeline register.
+	//control ff.
+	flopr #(2) flopr_ctrl_mw(clk, reset, {regwritem, memtoregm}, {regwritew, memtoregw});
 
 		
 		
