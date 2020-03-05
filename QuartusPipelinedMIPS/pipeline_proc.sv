@@ -54,6 +54,7 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 	//decode (d) suffix
 
 	//datapath:
+	logic d_ff_rst;
 	logic [31:0] rd1d, rd1d_muxed;
 	logic [31:0] rd2d, rd2d_muxed;
 	logic [31:0] signimmd, signimmdls2;
@@ -128,14 +129,14 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 	
 
 		//mux the signal according to branch or jump.
-		mux3 #(32) bj_mux3(pcsrcd, pcplus4f, pcbranchd, pcjumpd, bj_resultf);
+		//00 -> pcplus4f; 01 -> pcbranchd; 10 -> pcjumpd
+		assign bj_resultf = pcsrcd[1] ?  pcjumpd : (pcsrcd[0] ? pcbranchd : pcplus4f);
 	
 		//imemory is external.
 //		imem instr_mem(clk, pcf, instrf);
 		
 		//create the normal pc step: mips memory is word aligned,
 		//so increment by 4 bytes.
-		//the memory address in my memory are 32 bits each, so bump up by one to get each instruction.
 		assign pcplus4f = pcf + 4;
 		
 		
@@ -170,17 +171,16 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 					  rd1d,
 					  rd2d);
 					  
-		//rf rd output muxes
+		//RF read word output muxes
 		//todo: adjust s signal to be from hazard unit.
-		mux2 #(32) rd1_mux2(rd1d, aluoutm, 1'b0, rd1d_muxed);
-		mux2 #(32) rd2_mux2(rd2d, aluoutm, 1'b0, rd2d_muxed);
+		assign rd1d_muxed = 1'b0 ? aluoutm : rd1d;
+		assign rd2d_muxed = 1'b0 ? aluoutm : rd2d;
 				
 		//sign immediate extension.
-		signext signext_imm(instrd[15:0], signimmd);
+		assign signimmd[31:0] = {{16{instrd[15]}}, instrd[15:0]};
 		
-		ls2 ls2_signextimm(signimmd, signimmdls2);
-		
-		adder add_pc_signimmext(signimmdls2, pcplus4d, pcbranchd);
+		//ls by two and add
+		assign pcbranchd = {signimmd[29:0], 2'b00} + pcplus4d;
 		
 		//calculate jta for jump instructions.
 		assign pcjumpd[31:0] = {pcplus4d[31:28], instrd[25:0], 2'b00};
@@ -243,18 +243,20 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 		
 		
 		//rt vs rd mux.
-		mux2 #(5) mux2_rt_rs(rte, rde, regdste, writerege);
+		assign writerege = regdste ? rde : rte;
 		
-		//muxes for hazard control. set to always pass the rd1, rd2 values for now.
-		//todo: update with control signals and ff for hazards.
-		mux3 #(32) mux3_rd1_resultw_aluoutm(forwardae, rd1e, resultw, aluoutm, srcae);
-		mux3 #(32) mux3_rd2_resultw_aluoutm(forwardbe, rd2e, resultw, aluoutm, writedatae);
+		//00 -> rd1e; 01 -> resultw; 1x -> aluoutm;
+		assign srcae = forwardae[1] ? aluoutm : (forwardae[0] ? resultw : rd1e);
 		
-		mux2 #(32) mux2_rd2_toalu(writedatae, signimme, alusrce, srcbe);
+		//00 -> rd2e; 01 -> result2; 1x -> aluoutm;
+		assign writedatae = forwardbe[1] ? aluoutm : (forwardbe[0] ? resultw : rd2e);
+		
+		//0 -> signimme; 1 -> alusrce
+		assign srcbe = alusrce ? signimme : writedatae;
 		
 		//alu unit
 		//leave "cout" and "zero" disconnected for now.
-		alu_32bit alu(srcae, srcbe, alucontrole, aluoute, , );
+		alu_32bit alu(.a(srcae), .b(srcbe), .f(alucontrole), .y(aluoute), .cout(), .zero());
 		
 		//todo: controller signals pipelining.
 		
@@ -310,6 +312,7 @@ module pipeline_proc(input  logic 			clk, reset, enable,
 			memtoregw <= memtoregm;
 		end
 		
-		mux2 #(32) mux2_w_alu_readdataw(aluoutw, readdataw, memtoregw, resultw);
+		//0 -> aluoutw; 1 -> readdataw
+		assign resultw = memtoregw ? aluoutw : readdataw;
 
 endmodule
