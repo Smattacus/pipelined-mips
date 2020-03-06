@@ -8,8 +8,9 @@ module hazard(output logic 			stallf, stalld,
 //hazard_singles = {memtorege, regwritee, memtoregm, regwritem, regwritew}
 //hazard_mults = {rsd, rtd, rse, rte, writerege, writeregm, writeregw}
 
-				  
-				  
+
+
+
 //add in hazard control logic here.
 logic lwstall, branchstall;
 
@@ -19,7 +20,6 @@ logic [4:0] rsd, rtd, rse, rte, writerege, writeregm, writeregw;
 
 assign {memtorege, regwritee, memtoregm, regwritem, regwritew} = hazard_single_bus;				  
 assign {rsd, rtd, rse, rte, writerege, writeregm, writeregw} = hazard_mult_bus;
-
 
 always_comb 
 begin
