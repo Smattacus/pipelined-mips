@@ -1,131 +1,104 @@
-module pipeline_proc(input  logic clk_i, reset_i, enable_i, 
-        //output to external controller
-        output logic    [31:0]     instr_d_o, 
+module pipeline_proc(input logic clk_i, reset_i, enable_i, 
         //controller inputs
-        input logic                     rfwrite_d_i, memtorf_d_i, 
-        input logic                     memwrite_d_i, 
-        input logic     [2:0]       alucontrol_d_i,
-        input logic                     alusrc_d_i, 
-        input logic                     regdst_d_i,
-        input logic                     branch_d_i,
-        input logic                     jump_d_i,
-        //output to instr mem
-        output logic [31:0]     pc_f_o, 
+        input logic             rfwrite_d_i, memtorf_d_i,  memwrite_d_i, alusrc_d_i, 
+        input logic             regdst_d_i,  branch_d_i, jump_d_i,
+        input logic     [2:0]   alucontrol_d_i,
         //instruction input
-        input logic [31:0]      instr_f_i, 
-        //output to data mem
-        output logic [31:0]     aluout_m_o, writedata_m_o, 
-        output logic                    memwrite_m_o,
+        input logic     [31:0]  instr_f_i, 
         //word read from data mem
-        input logic [31:0]      readdata_m_o,
+        input logic     [31:0]  readdata_m_o,
         //hazard inputs.
-        input logic                     stall_f_i, stall_d_i,
-        input logic                     forwardad_i, forwardbd_i,
-        input logic                     flush_e_i,
-        input logic [1:0]       forwardae_i, forwardbe_i,
-        //define hazard outputs here.
-        //six one bit signals:
-        //{memtorf_e_o, rfwrite_e_o, memtorf_m_o, rfwrite_m_o, rfwrite_w_o}
-        output logic memtorf_e_o, rfwrite_e_o, memtorf_m_o, rfwrite_m_o, rfwrite_w_o,
-        //{rs_d_o, rt_d_o, rs_e_o, rt_e_o, writerf_e_o, writereg, writerf_w_o}
-        //each of these is 5 bits.
-        output logic [4:0] rs_d_o, rt_d_o, rs_e_o, rt_e_o, writerf_e_o,
-        output logic [4:0] writerf_m_o, writerf_w_o);
-                                                        
-                                         
-    //this is the pipelined processor.
-    //the memories and controller are external,
-    //so we have to send data in / out to them.
-    //the controller inputs come in at the "decode" stage.
-    
-    //sections:
-    //1. signal definitions.
-    //2. module definitions.
+        input logic             stall_f_i, stall_d_i,
+        input logic             forwardad_i, forwardbd_i,
+        input logic             flush_e_i,
+        input logic     [1:0]   forwardae_i, forwardbe_i,
+        //output to external controller
+        output logic    [31:0]  instr_d_o, 
+        //output to instr mem
+        output logic    [31:0]  pc_f_o, 
+        //output to data mem
+        output logic    [31:0]  aluout_m_o, writedata_m_o, 
+        output logic            memwrite_m_o,
+        //HAZARD OUTPUTS:
+        output logic            memtorf_e_o, rfwrite_e_o, memtorf_m_o, rfwrite_m_o, rfwrite_w_o,
+        output logic    [4:0]   rs_d_o, rt_d_o, rs_e_o, rt_e_o, writerf_e_o,
+        output logic    [4:0]   writerf_m_o, writerf_w_o);
     
     //Internal signals have a suffix denoting the pipeline stage it originates in:
     //_f = fetch; _d = decode; _e = execute; _m = memory; _w = writeback
-    logic [31:0] pc, bj_result_f, pcplus4_f;
     
+    //Fetch: Datapath signals
+    logic [31:0] pc, bj_result_f, pcplus4_f;
     logic d_ff_rst;
-    //decode (d) suffix
 
-    //datapath:
-    logic [31:0] rd1_d, rd1muxed_d, rd2_d, rd2muxed_d, signimm_d, pcplus4_d, pcbranch_d, pcjump_d;
+    //Decode: Datapath signals
     logic [4:0] rd_d;
+    logic [31:0] rd1_d, rd1muxed_d, rd2_d, rd2muxed_d, signimm_d, pcplus4_d;
+    logic [31:0] pcbranch_d, pcjump_d;
 
-    //controller signals:
+    //Decode: Controller signals
     logic [1:0] pcsrc_d;
     
-    //execute (e) suffix:
-    
-    //datapath:
+    //Execute: Datapath Signals
     logic [31:0] srca_e, srcb_e, writedata_e, signimm_e, aluout_e, rd1_e, rd2_e;
     logic [4:0] rd_e;
     
-    //controller
+    //Execute: Controller Signals
     logic memwrite_e, alusrc_e, regdst_e;
     logic [2:0] alucontrol_e;
     
-    //writeback stage (w)
-    //datapath
+    //Writeback: Datapath signals
     logic [31:0] readdata_w, aluout_w, result_w;
     
-    //controller
+    //Writeback: Controller Signals
     logic memtorf_w;
     
-    //organize this into the pipelined sections.
-    //from left to right:
-    
-    //fetch (f)
-    
+    //Fetch Pipeline Stage
     
     always_ff @(posedge clk_i, posedge reset_i)
-            if (reset_i) pc_f_o <= 0;
-            else if (~stall_f_i) pc_f_o <= bj_result_f; 
+        if (reset_i) pc_f_o <= 0;
+        else if (~stall_f_i) pc_f_o <= bj_result_f; 
     
 
     //mux the signal according to branch or jump.
     //00 -> pcplus4_f; 01 -> pcbranch_d_i; 10 -> pcjump_d
     assign bj_result_f = pcsrc_d[1] ?  pcjump_d : (pcsrc_d[0] ? pcbranch_d : pcplus4_f);
     
-    //imemory is external.
-//  imem instr_mem(clk, pc_f_o, instr_f_i);
-    
     //create the normal pc step: mips memory is word aligned,
     //so increment by 4 bytes.
     assign pcplus4_f = pc_f_o + 4;
     
-    
-    // decode (d)
+    //Decode Pipeline Stage
 
     assign pcsrc_d[0] = branch_d_i & (rd1muxed_d == rd2muxed_d);
     assign pcsrc_d[1] = jump_d_i;
     
     //asynch reset_i FF with synch clear / enable_i for pipelining.
     //datapath ffs:
-    assign d_ff_rst = reset_i | (|pcsrc_d); //Todo: verify this one liner does actually do (a OR (b[1]OR b[2]))
+    //Todo: verify this one liner does actually do (a OR (b[1]OR b[2]))
+    assign d_ff_rst = reset_i | (|pcsrc_d);
     
     always_ff @(posedge clk_i, posedge d_ff_rst)
-            if (d_ff_rst) begin
-                    //Data signals
-                    instr_d_o <= 0;
-                    pcplus4_d <= 0;
-            end
-            else if (~stall_d_i) begin
-                    //Data signals
-                    instr_d_o <= instr_f_i;
-                    pcplus4_d <= pcplus4_f;
-            end
+        if (d_ff_rst) begin
+            //Data signals
+            instr_d_o <= 0;
+            pcplus4_d <= 0;
+        end
+        else if (~stall_d_i) begin
+            //Data signals
+            instr_d_o <= instr_f_i;
+            pcplus4_d <= pcplus4_f;
+        end
     
     //register file
     regfile rf(.clk_i(~clk_i), .reset_i(reset_i), 
-                              .we3_i(rfwrite_w_o),
-                              .ra1_i(instr_d_o[25:21]),
-                              .ra2_i(instr_d_o[20:16]),
-                              .wa3_i(writerf_w_o),
-                              .wd3_i(result_w),
-                              .rd1_o(rd1_d),
-                              .rd2_o(rd2_d));
+        .we3_i(rfwrite_w_o),
+        .ra1_i(instr_d_o[25:21]),
+        .ra2_i(instr_d_o[20:16]),
+        .wa3_i(writerf_w_o),
+        .wd3_i(result_w),
+        .rd1_o(rd1_d),
+        .rd2_o(rd2_d));
                               
     //RF read word output muxes
     //todo: adjust s signal to be from hazard unit.
@@ -146,55 +119,57 @@ module pipeline_proc(input  logic clk_i, reset_i, enable_i,
     assign rt_d_o = instr_d_o[20:16];
     assign rd_d = instr_d_o[15:11];
     
-    
-    //execute (e)
+    //Execute Pipeline stage
 
     //Execute Stage FF with asynch reset_i and synch clear.
     always_ff @(posedge clk_i, posedge reset_i)
     if (reset_i) begin
-            rd1_e <= 0;
-            rd2_e <= 0;
-            rs_e_o <= 0;
-            rt_e_o <= 0;
-            rd_e <= 0;
-            signimm_e <= 0;
-            //Control signals
-            rfwrite_e_o <= 0;
-            memtorf_e_o <= 0;
-            memwrite_e <= 0;
-            alucontrol_e <= 0;
-            alusrc_e <= 0;
-            regdst_e <= 0;          
+        //Data signals
+        rd1_e <= 0;
+        rd2_e <= 0;
+        rs_e_o <= 0;
+        rt_e_o <= 0;
+        rd_e <= 0;
+        signimm_e <= 0;
+        //Control signals
+        rfwrite_e_o <= 0;
+        memtorf_e_o <= 0;
+        memwrite_e <= 0;
+        alucontrol_e <= 0;
+        alusrc_e <= 0;
+        regdst_e <= 0;          
     end
     else if (flush_e_i) begin //can I just write (reset_i | flush_e_i) above and get rid of this?
-            rd1_e <= 0;
-            rd2_e <= 0;
-            rs_e_o <= 0;
-            rt_e_o <= 0;
-            rd_e <= 0;
-            signimm_e <= 0;
-            //Control signals
-            rfwrite_e_o <= 0;
-            memtorf_e_o <= 0;
-            memwrite_e <= 0;
-            alucontrol_e <= 0;
-            alusrc_e <= 0;
-            regdst_e <= 0;  
+        //Data signals
+        rd1_e <= 0;
+        rd2_e <= 0;
+        rs_e_o <= 0;
+        rt_e_o <= 0;
+        rd_e <= 0;
+        signimm_e <= 0;
+        //Control signals
+        rfwrite_e_o <= 0;
+        memtorf_e_o <= 0;
+        memwrite_e <= 0;
+        alucontrol_e <= 0;
+        alusrc_e <= 0;
+        regdst_e <= 0;  
     end
     else begin
-            rd1_e <= rd1_d;
-            rd2_e <= rd2_d;
-            rs_e_o <= rs_d_o;
-            rt_e_o <= rt_d_o;
-            rd_e <= rd_d;
-            signimm_e <= signimm_d;
-            //Control signals
-            rfwrite_e_o <= rfwrite_d_i;
-            memtorf_e_o <= memtorf_d_i;
-            memwrite_e <= memwrite_d_i;
-            alucontrol_e <= alucontrol_d_i;
-            alusrc_e <= alusrc_d_i;
-            regdst_e <= regdst_d_i;
+        //Data signals
+        rd1_e <= rd1_d;
+        rd2_e <= rd2_d;
+        rs_e_o <= rs_d_o;
+        rt_e_o <= rt_d_o;
+        rd_e <= rd_d;
+        signimm_e <= signimm_d;
+        //Control signals
+        rfwrite_e_o <= rfwrite_d_i;
+        memtorf_e_o <= memtorf_d_i;
+        memwrite_e <= memwrite_d_i;
+        alucontrol_e <= alucontrol_d_i;
+        alusrc_e <= alusrc_d_i;
+        regdst_e <= regdst_d_i;
     end
     
     
@@ -214,62 +189,56 @@ module pipeline_proc(input  logic clk_i, reset_i, enable_i,
     //leave "cout" and "zero" disconnected for now.
     alu_32bit alu(.a(srca_e), .b(srcb_e), .f(alucontrol_e), .y(aluout_e), .cout(), .zero());
     
-    //todo: controller signals pipelining.
-    
-    // memory (m)
+    // Memory Pipeline Stage.
 
     //Memory FF from Execute stage. Asynch reset_i.
     always_ff @(posedge clk_i, posedge reset_i)
     if (reset_i) begin
-            //Data signals.
-            aluout_m_o <= 0;
-            writedata_m_o <= 0;
-            writerf_m_o <= 0;
-            //Control Signals.
-            rfwrite_m_o <= 0;
-            memtorf_m_o <= 0;
-            memwrite_m_o <= 0;
+        //Data signals.
+        aluout_m_o <= 0;
+        writedata_m_o <= 0;
+        writerf_m_o <= 0;
+        //Control Signals.
+        rfwrite_m_o <= 0;
+        memtorf_m_o <= 0;
+        memwrite_m_o <= 0;
     end
     else begin
-            //Data signals
-            aluout_m_o <= aluout_e;
-            writedata_m_o <= writedata_e;
-            writerf_m_o <= writerf_e_o;
-            //Control Signals
-            rfwrite_m_o <= rfwrite_e_o;
-            memtorf_m_o <= memtorf_e_o;
-            memwrite_m_o <= memwrite_e;
+        //Data signals
+        aluout_m_o <= aluout_e;
+        writedata_m_o <= writedata_e;
+        writerf_m_o <= writerf_e_o;
+        //Control Signals
+        rfwrite_m_o <= rfwrite_e_o;
+        memtorf_m_o <= memtorf_e_o;
+        memwrite_m_o <= memwrite_e;
             
     end
     
-
-    
-    //data memory is external -- commented out.
-//  dmem data_mem(clk_i, memwrite_m_o, aluout_m_o, writedata_m_o, readdata_m_o);
-    
-    
-    //Writeback (w)
+    //Writeback pipeline stage.
 
     always_ff @(posedge clk_i, posedge reset_i)
     if (reset_i) begin
-            readdata_w <= 0;
-            aluout_w <= 0;
-            writerf_w_o <= 0;
-            //Control Signals
-            rfwrite_w_o <= 0;
-            memtorf_w <= 0;
+        //Data signals
+        readdata_w <= 0;
+        aluout_w <= 0;
+        writerf_w_o <= 0;
+        //Control Signals
+        rfwrite_w_o <= 0;
+        memtorf_w <= 0;
     end
     else begin
-            readdata_w <= readdata_m_o;
-            aluout_w <= aluout_m_o;
-            writerf_w_o <= writerf_m_o;
-            //Control Signals
-            rfwrite_w_o <= rfwrite_m_o;
-            memtorf_w <= memtorf_m_o;
+        //Data Signals
+        readdata_w <= readdata_m_o;
+        aluout_w <= aluout_m_o;
+        writerf_w_o <= writerf_m_o;
+        //Control Signals
+        rfwrite_w_o <= rfwrite_m_o;
+        memtorf_w <= memtorf_m_o;
     end
     
     //0 -> aluout_w; 1 -> readdata_w
-    assign result_w = memtorf_w ? aluout_w : readdata_w;
+    assign result_w = memtorf_w ? readdata_w : aluout_w;
     
 
 endmodule

@@ -1,91 +1,105 @@
-module mips(input logic clk, reset,
-			  output logic [31:0] writedata, dataadr,
-			  output logic 		 memwrite);
-		
-		//instantiate mips processor and memories (data memory and program mem)
-		
-		logic zero;
-		
-		logic [31:0] pcf, instrf, instrd, aluoutm, writedatam, readdatam;
-		logic [2:0] alucontrold;
-		logic branchd, jumpd, regdstd, alusrcd, memwrited, memtoregd, regwrited;
-		logic memwritem;
-		
-		//hazard signals to / from the processor.
-		logic 			stallf, stalld, forwardad, forwardbd, flushe;
-		logic [1:0]		forwardae, forwardbe;
-		//hazard_singles = {memtorege, regwritee, memtoregm, regwritem, regwritew}
-		logic [4:0] 	hazard_single_bus;
-		//hazard_mults = {rsd, rtd, rse, rte, writerege, writeregm, writeregw}
-		logic [34:0] 	hazard_mult_bus;
-		
-		//pipelined processor.
-		pipeline_proc proc(.clk_i(clk), .reset_i(reset), .enable_i(1'b1), 
-			.instr_d_o(instrd),
-			.rfwrite_d_i(regwrited), 
-			.memtorf_d_i(memtoregd), 
-            .memwrite_d_i(memwrited), 
-            .alucontrol_d_i(alucontrold), 
-            .alusrc_d_i(alusrcd), 
-            .regdst_d_i(regdstd), 
-            .branch_d_i(branchd), 
-            .jump_d_i(jumpd),
-			.pc_f_o(pcf), 
-            .instr_f_i(instrf), 
-            .aluout_m_o(aluoutm), 
-            .writedata_m_o(writedatam), 
-            .memwrite_m_o(memwritem), 
-            .readdata_m_o(readdatam),
-            .stall_f_i(stallf), 
-            .stall_d_i(stalld), 
-            .forwardad_i(forwardad), 
-            .forwardbd_i(forwardbd), 
-            .flush_e_i(flushe), 
-            .forwardae_i(forwardae), 
-            .forwardbe_i(forwardbe),
-			.memtorf_e_o(hazard_single_bus[4]),
-            .rfwrite_e_o(hazard_single_bus[3]),
-            .memtorf_m_o(hazard_single_bus[2]),
-            .rfwrite_m_o(hazard_single_bus[1]),
-            .rfwrite_w_o(hazard_single_bus[0]),
-            .rs_d_o(hazard_mult_bus[34:30]),
-            .rt_d_o(hazard_mult_bus[29:25]),
-            .rs_e_o(hazard_mult_bus[24:20]),
-            .rt_e_o(hazard_mult_bus[19:15]),
-            .writerf_e_o(hazard_mult_bus[14:10]),
-            .writerf_m_o(hazard_mult_bus[9:5]),
-            .writerf_w_o(hazard_mult_bus[4:0]));
-			
-        //Instruction memory.
-		imem instructions(.clk_i(clk), 
-            .a_i(pcf[7:2]), 
-            .rd_o(instrf));
-		
-        //Data memory.
-		dmem data_memory(.clk_i(clk), 
-            .we_i(memwritem), 
-            .a_i(aluoutm), 
-            .wd_i(writedatam), 
-            .rd_o(readdatam));
-		
-		//todo: create the hazard control unit here.
-		hazard mips_hcu(stallf, stalld, forwardad, forwardbd, flushe, forwardae, forwardbe,
-			branchd, jumpd, hazard_single_bus, hazard_mult_bus);
-		
-		assign writedata = writedatam;
-		assign dataadr = aluoutm;
-		assign memwrite = memwritem;
-		
-		//controller unit.
-		controller mips_controller(.opcode_i(instrd[31:26]), 
-            .funct_i(instrd[5:0]), 
-            .rfwrite_o(regwrited), 
-            .memtorf_o(memtoregd), 
-            .memwrite_o(memwrited), 
-            .alusrc_o(alusrcd), 
-            .rfdst_o(regdstd), 
-            .branch_o(branchd), 
-            .jump_o(jumpd), 
-            .alucontrol_o(alucontrold));
-		
+module mips(input logic clk_i, reset_i,
+              output logic [31:0] writedata_o, dataadr_o,
+              output logic       memwrite_o);
+    
+    //Signals to and from the MIPS and memories.    
+    logic           branch_d, jump_d, rfdst_d, alusrc_d, memwrite_d;
+    logic           memtorf_d, rfwrite_d, memwrite_m;
+    logic [2:0]     alucontrol_d;
+    logic [31:0]    pc_f, instr_f, instr_d, aluout_m, writedata_m, readdata_m;
+    
+    //hazard signals to / from the processor.
+    logic           memtorf_e, rfwrite_e, memtorf_m, rfwrite_m, rfwrite_w;
+    logic           stall_f, stall_d, forwardad, forwardbd, flush_e;
+    logic [1:0]     forwardae, forwardbe;
+    logic [4:0]     rs_d, rt_d, rs_e, rt_e, writerf_e, writerf_m, writerf_w;
+    
+    //pipelined processor.
+    pipeline_proc proc(.clk_i(clk_i), .reset_i(reset_i), .enable_i(1'b1), 
+        .instr_d_o(instr_d),
+        .rfwrite_d_i(rfwrite_d), 
+        .memtorf_d_i(memtorf_d), 
+        .memwrite_d_i(memwrite_d), 
+        .alucontrol_d_i(alucontrol_d), 
+        .alusrc_d_i(alusrc_d), 
+        .regdst_d_i(rfdst_d), 
+        .branch_d_i(branch_d), 
+        .jump_d_i(jump_d),
+        .pc_f_o(pc_f), 
+        .instr_f_i(instr_f), 
+        .aluout_m_o(aluout_m), 
+        .writedata_m_o(writedata_m), 
+        .memwrite_m_o(memwrite_m), 
+        .readdata_m_o(readdata_m),
+        .stall_f_i(stall_f), 
+        .stall_d_i(stall_d), 
+        .forwardad_i(forwardad), 
+        .forwardbd_i(forwardbd), 
+        .flush_e_i(flush_e), 
+        .forwardae_i(forwardae), 
+        .forwardbe_i(forwardbe),
+        .memtorf_e_o(memtorf_e),
+        .rfwrite_e_o(rfwrite_e),
+        .memtorf_m_o(memtorf_m),
+        .rfwrite_m_o(rfwrite_m),
+        .rfwrite_w_o(rfwrite_w),
+        .rs_d_o(rs_d),
+        .rt_d_o(rt_d),
+        .rs_e_o(rs_e),
+        .rt_e_o(rt_e),
+        .writerf_e_o(writerf_e),
+        .writerf_m_o(writerf_m),
+        .writerf_w_o(writerf_w));
+        
+    //Instruction memory.
+    imem instructions(.clk_i(clk_i), 
+        .a_i(pc_f[7:2]), 
+        .rd_o(instr_f));
+    
+    //Data memory.
+    dmem data_memory(.clk_i(clk_i), 
+        .we_i(memwrite_m), 
+        .a_i(aluout_m), 
+        .wd_i(writedata_m), 
+        .rd_o(readdata_m));
+
+    //Hazard control unit.    
+    hazard mips_hcu(.branch_d_i(branch_d),
+        .jump_d_i(jump_d),
+        .memtorf_e_i(memtorf_e),
+        .rfwrite_e_i(rfwrite_e),
+        .memtorf_m_i(memtorf_m),
+        .rfwrite_m_i(rfwrite_m),
+        .rfwrite_w_i(rfwrite_w),
+        .rs_d_i(rs_d),
+        .rt_d_i(rt_d),
+        .rs_e_i(rs_e),
+        .rt_e_i(rt_e),
+        .writerf_e_i(writerf_e),
+        .writerf_m_i(writerf_m),
+        .writerf_w_i(writerf_w),
+        .stall_f_o(stall_f),
+        .stall_d_o(stall_d),
+        .forwardad_o(forwardad),
+        .forwardbd_o(forwardbd),
+        .flush_e_o(flush_e),
+        .forwardae_o(forwardae),
+        .forwardbe_o(forwardbe));
+    
+    assign writedata_o = writedata_m;
+    assign dataadr_o = aluout_m;
+    assign memwrite_o = memwrite_m;
+    
+    //Controller unit.
+    controller mips_controller(.opcode_i(instr_d[31:26]), 
+        .funct_i(instr_d[5:0]), 
+        .rfwrite_o(rfwrite_d), 
+        .memtorf_o(memtorf_d), 
+        .memwrite_o(memwrite_d), 
+        .alusrc_o(alusrc_d), 
+        .rfdst_o(rfdst_d), 
+        .branch_o(branch_d), 
+        .jump_o(jump_d), 
+        .alucontrol_o(alucontrol_d));
+    
 endmodule

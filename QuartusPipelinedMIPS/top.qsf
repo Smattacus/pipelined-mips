@@ -70,8 +70,6 @@ set_global_assignment -name LICENSE_FILE simulation/modelsim/memfile_addi.dat
 set_global_assignment -name LICENSE_FILE memfile.dat
 set_global_assignment -name SYSTEMVERILOG_FILE pipeline_proc.sv
 set_global_assignment -name SYSTEMVERILOG_FILE controller.sv
-set_global_assignment -name SYSTEMVERILOG_FILE maindec.sv
-set_global_assignment -name SYSTEMVERILOG_FILE aludec.sv
 set_global_assignment -name SYSTEMVERILOG_FILE regfile.sv
 set_global_assignment -name SYSTEMVERILOG_FILE dmem.sv
 set_global_assignment -name SYSTEMVERILOG_FILE imem.sv

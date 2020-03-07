@@ -1,53 +1,40 @@
-module hazard(output logic 			stallf, stalld,
-				  output logic 			forwardad, forwardbd, flushe,
-				  output logic [1:0] 	forwardae, forwardbe,
-				  input logic 			branchd,
-				  input logic 			jumpd,
-				  input logic [4:0]	hazard_single_bus,
-				  input logic [34:0] hazard_mult_bus);
-//hazard_singles = {memtorege, regwritee, memtoregm, regwritem, regwritew}
-//hazard_mults = {rsd, rtd, rse, rte, writerege, writeregm, writeregw}
-
-
-
+module hazard(input logic branch_d_i, jump_d_i, memtorf_e_i, rfwrite_e_i,
+    input logic memtorf_m_i, rfwrite_m_i, rfwrite_w_i, 
+    input logic [4:0] rs_d_i, rt_d_i, rs_e_i, rt_e_i, writerf_e_i, writerf_m_i, writerf_w_i,
+    output logic stall_f_o, stall_d_o, forwardad_o, forwardbd_o, flush_e_o, 
+    output logic [1:0] 	forwardae_o, forwardbe_o);
 
 //add in hazard control logic here.
 logic lwstall, branchstall;
 
-//bus stop.
-logic memtorege, regwritee, memtoregm, regwritem, regwritew;
-logic [4:0] rsd, rtd, rse, rte, writerege, writeregm, writeregw;
-
-assign {memtorege, regwritee, memtoregm, regwritem, regwritew} = hazard_single_bus;				  
-assign {rsd, rtd, rse, rte, writerege, writeregm, writeregw} = hazard_mult_bus;
-
 always_comb 
 begin
-	//do the forwardae logic first - checks rse.
-	if ((rse != 0) & (rse == writeregm) & regwritem) forwardae = 2'b10;
-	else if ((rse != 0) & (rse == writeregw) & regwritew) forwardae = 2'b01;
-	else	forwardae = 2'b00;
-	//and the forwardbe logic - checks rte
-	if ((rte != 0) & (rte == writeregm) & regwritem) forwardbe = 2'b10;
-	else if ((rte != 0) & (rte == writeregw) & regwritew) forwardbe = 2'b01;
-	else forwardbe = 2'b00;
+	//do the forwardae_o logic first - checks rs_e_i.
+	if ((rs_e_i != 0) & (rs_e_i == writerf_m_i) & rfwrite_m_i) forwardae_o = 2'b10;
+	else if ((rs_e_i != 0) & (rs_e_i == writerf_w_i) & rfwrite_w_i) forwardae_o = 2'b01;
+	else	forwardae_o = 2'b00;
+	//and the forwardbe_o logic - checks rt_e_i
+	if ((rt_e_i != 0) & (rt_e_i == writerf_m_i) & rfwrite_m_i) forwardbe_o = 2'b10;
+	else if ((rt_e_i != 0) & (rt_e_i == writerf_w_i) & rfwrite_w_i) forwardbe_o = 2'b01;
+	else forwardbe_o = 2'b00;
 end
 
 
-assign forwardad = (rsd != 0) & (rsd == writeregm) & regwritem;
-assign forwardbd = (rtd != 0) & (rtd == writeregm) & regwritem;
+assign forwardad_o = (rs_d_i != 0) & (rs_d_i == writerf_m_i) & rfwrite_m_i;
+assign forwardbd_o = (rt_d_i != 0) & (rt_d_i == writerf_m_i) & rfwrite_m_i;
 
-assign branchstall = (branchd & regwritee & (writerege == rsd | writerege == rtd)) |
-							(branchd & memtoregm & (writeregm == rsd | writeregm == rtd));
+assign branchstall = (branch_d_i & rfwrite_e_i & ((writerf_e_i == rs_d_i)
+    | (writerf_e_i == rt_d_i))) | (branch_d_i & memtorf_m_i & ((writerf_m_i == rs_d_i)
+    | (writerf_m_i == rt_d_i)));
 								
 //lwstall for data hazards.
 	//note we use the logical or(|), not the boolean or (^)
-assign lwstall = ((rsd == rte) | (rtd == rte)) & memtorege;
+assign lwstall = ((rs_d_i == rt_e_i) | (rt_d_i == rt_e_i)) & memtorf_e_i;
 
 //send the signal to everything else.
-assign #1 stalld = lwstall | branchstall | jumpd;
-assign #1 flushe = stalld;
-assign #1 stallf = stalld;
+assign #1 stall_d_o = lwstall | branchstall | jump_d_i;
+assign #1 flush_e_o = stall_d_o;
+assign #1 stall_f_o = stall_d_o;
 		
 		
 				  

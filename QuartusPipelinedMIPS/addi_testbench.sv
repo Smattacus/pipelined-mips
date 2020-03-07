@@ -13,7 +13,7 @@ module addi_testbench();
 	logic [31:0] clock_count;
 	
 	//instantiate mips processor.
-	top dut(clk, reset, writedata, dataadr, memwrite);
+	mips dut(clk, reset, writedata, dataadr, memwrite);
 	
 	//reset to start out.
 	initial
