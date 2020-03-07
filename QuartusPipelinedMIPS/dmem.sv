@@ -1,13 +1,13 @@
-module dmem(input logic clk, we,
-				 input logic [31:0] a, wd,
-				 output logic [31:0] rd);
+module dmem(input logic clk_i, we_i,
+				 input logic [31:0] a_i, wd_i,
+				 output logic [31:0] rd_o);
 
 logic [31:0] ram [63:0]; //make it, for now, 64 words deep.
 
-assign rd = ram[a[31:2]]; // word aligned
+assign rd_o = ram[a_i[31:2]]; // word aligned
 
-always_ff @(posedge clk)
-	if (we) ram[a[31:2]] <= wd;
+always_ff @(posedge clk_i)
+	if (we_i) ram[a_i[31:2]] <= wd_i;
 
 //initialize it.
 //only for debugging purposes.

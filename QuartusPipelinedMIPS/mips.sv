@@ -56,9 +56,17 @@ module mips(input logic clk, reset,
             .writerf_m_o(hazard_mult_bus[9:5]),
             .writerf_w_o(hazard_mult_bus[4:0]));
 			
-		imem instructions(clk, pcf[7:2], instrf);
+        //Instruction memory.
+		imem instructions(.clk_i(clk), 
+            .a_i(pcf[7:2]), 
+            .rd_o(instrf));
 		
-		dmem data_memory(clk, memwritem, aluoutm, writedatam, readdatam);
+        //Data memory.
+		dmem data_memory(.clk_i(clk), 
+            .we_i(memwritem), 
+            .a_i(aluoutm), 
+            .wd_i(writedatam), 
+            .rd_o(readdatam));
 		
 		//todo: create the hazard control unit here.
 		hazard mips_hcu(stallf, stalld, forwardad, forwardbd, flushe, forwardae, forwardbe,
@@ -69,9 +77,15 @@ module mips(input logic clk, reset,
 		assign memwrite = memwritem;
 		
 		//controller unit.
-		controller mips_controller(instrd[31:26], instrd[5:0], regwrited, memtoregd, 
-			memwrited, alusrcd, regdstd, branchd, jumpd, alucontrold);
-		
-		
+		controller mips_controller(.opcode_i(instrd[31:26]), 
+            .funct_i(instrd[5:0]), 
+            .rfwrite_o(regwrited), 
+            .memtorf_o(memtoregd), 
+            .memwrite_o(memwrited), 
+            .alusrc_o(alusrcd), 
+            .rfdst_o(regdstd), 
+            .branch_o(branchd), 
+            .jump_o(jumpd), 
+            .alucontrol_o(alucontrold));
 		
 endmodule
