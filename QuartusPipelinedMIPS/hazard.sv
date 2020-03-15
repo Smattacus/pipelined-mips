@@ -36,6 +36,8 @@ assign #1 stall_d_o = lwstall | branchstall | jump_d_i;
 assign #1 flush_e_o = stall_d_o;
 assign #1 stall_f_o = stall_d_o;
 		
+
+
 		
 				  
 endmodule

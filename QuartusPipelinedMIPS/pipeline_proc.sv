@@ -28,7 +28,7 @@ module pipeline_proc(input logic clk_i, reset_i, enable_i,
     //_f = fetch; _d = decode; _e = execute; _m = memory; _w = writeback
     
     //Fetch: Datapath signals
-    logic [31:0] pc, bj_result_f, pcplus4_f;
+    logic [31:0] bj_result_f, pcplus4_f;
 
     //Decode: Datapath signals
     logic [4:0] rd_d;
@@ -56,7 +56,7 @@ module pipeline_proc(input logic clk_i, reset_i, enable_i,
     
     always_ff @(posedge clk_i, posedge reset_i)
         if (reset_i) pc_f_o <= 0;
-        else if (~stall_f_i) pc_f_o <= bj_result_f; 
+        else if (~stall_f_i | pcsrc_d[1]) pc_f_o <= bj_result_f; 
     
 
     //mux the signal according to branch or jump.
@@ -80,16 +80,20 @@ module pipeline_proc(input logic clk_i, reset_i, enable_i,
             instr_d_o <= 0;
             pcplus4_d <= 0;
         end
-        else if (|pcsrc_d) begin //TODO: Again, I want to merge this above. Make a testbench and toy module.
+         else if (|pcsrc_d) begin //TODO: Again, I want to merge this above. Make a testbench and toy module.
             instr_d_o <= 0;
             pcplus4_d <= 0;
-        end
+         end  
         else if (~stall_d_i) begin
             //Data signals
             instr_d_o <= instr_f_i;
             pcplus4_d <= pcplus4_f;
         end
-    
+
+
+
+
+
     //register file
     regfile rf(.clk_i(~clk_i), .reset_i(reset_i), 
         .we3_i(rfwrite_w_o),
