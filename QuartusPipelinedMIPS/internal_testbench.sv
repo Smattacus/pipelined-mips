@@ -17,16 +17,17 @@ module internal_testbench();
     logic [4:0] rs_d_o_bound; 
     logic [4:0] rt_d_o_bound;
 
-//    assign rd_d = dut.proc.rd_d;
-//    assign rs_d_o = dut.proc.rs_d_o;
-//    assign rt_d_o = dut.proc.rt_d_o;
+    assign rd_d_o_bound = dut.proc.rd_d;
+    assign rs_d_o_bound = dut.proc.rs_d_o;
+    assign rt_d_o_bound = dut.proc.rt_d_o;
 
     mips dut(.clk_i(clk), .reset_i(reset),
         .writedata_o(writedata),
         .dataadr_o(dataadr),
         .memwrite_o(memwrite));
 
-    bind dut.proc instr_d_if rd_connect(.*);
+    //Bind instantiation is here.
+//    bind dut.proc instr_d_if rd_connect(.*);
 
     initial
         begin
@@ -40,16 +41,20 @@ module internal_testbench();
         clk <= 1; #5; clk <= 0; #5;
     end
 
-    //Stop the simulation after 25 clock cycles.
+    //Check the simulation when it writes to data memory.
     always @(posedge clk)
     begin
-        
-        if (clock_count == 25) begin
-            $display("Simulation done!");
-            $stop;
-        end 
-        else
-            clock_count++;
+       
+        if (memwrite) begin 
+            if (dataadr === 84 & writedata ===7) begin
+                $display("simulation succeeded!");
+                $stop;
+            end else if (dataadr !== 80) begin
+                $display("simulation failed!");
+                $stop;
+            end
+        end
+        clock_count++;
     end
 
 

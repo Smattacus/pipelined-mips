@@ -29,7 +29,6 @@ module pipeline_proc(input logic clk_i, reset_i, enable_i,
     
     //Fetch: Datapath signals
     logic [31:0] pc, bj_result_f, pcplus4_f;
-    logic d_ff_rst;
 
     //Decode: Datapath signals
     logic [4:0] rd_d;
@@ -70,17 +69,18 @@ module pipeline_proc(input logic clk_i, reset_i, enable_i,
     
     //Decode Pipeline Stage
 
-    assign pcsrc_d[0] = branch_d_i & (rd1muxed_d == rd2muxed_d);
-    assign pcsrc_d[1] = jump_d_i;
     
     //asynch reset_i FF with synch clear / enable_i for pipelining.
     //datapath ffs:
     //Todo: verify this one liner does actually do (a OR (b[1]OR b[2]))
-    assign d_ff_rst = reset_i | (|pcsrc_d);
     
-    always_ff @(posedge clk_i, posedge d_ff_rst)
-        if (d_ff_rst) begin
+    always_ff @(posedge clk_i, posedge reset_i)
+        if (reset_i) begin
             //Data signals
+            instr_d_o <= 0;
+            pcplus4_d <= 0;
+        end
+        else if (|pcsrc_d) begin //TODO: Again, I want to merge this above. Make a testbench and toy module.
             instr_d_o <= 0;
             pcplus4_d <= 0;
         end
@@ -102,9 +102,13 @@ module pipeline_proc(input logic clk_i, reset_i, enable_i,
                               
     //RF read word output muxes
     //todo: adjust s signal to be from hazard unit.
-    assign rd1muxed_d = 1'b0 ? aluout_m_o : rd1_d;
-    assign rd2muxed_d = 1'b0 ? aluout_m_o : rd2_d;
-                    
+    assign rd1muxed_d = forwardad_i ? aluout_m_o : rd1_d;
+    assign rd2muxed_d = forwardbd_i ? aluout_m_o : rd2_d;
+    
+    //Calculate whether we are branching.    
+    assign pcsrc_d[0] = branch_d_i & (rd1muxed_d == rd2muxed_d);
+    assign pcsrc_d[1] = jump_d_i;
+
     //sign immediate extension.
     assign signimm_d[31:0] = {{16{instr_d_o[15]}}, instr_d_o[15:0]};
     
